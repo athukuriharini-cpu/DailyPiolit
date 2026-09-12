@@ -24,12 +24,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 const CLOUD_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyA83IoYuwWzuAlmU8lo3BbKSWq7ggCEB7U",
-  authDomain: "ats-showcase-2026.firebaseapp.com",
-  projectId: "ats-showcase-2026",
-  storageBucket: "ats-showcase-2026.firebasestorage.app",
-  messagingSenderId: "123765295193",
-  appId: "1:123765295193:web:cf3059e30129f024b3c948"
+  apiKey: "AIzaSyC-tWI6IlbdpAe0FQ2D3c-vLdA4xoziocs",
+  authDomain: "dailypilot-ai-2026.firebaseapp.com",
+  projectId: "dailypilot-ai-2026",
+  storageBucket: "dailypilot-ai-2026.firebasestorage.app",
+  messagingSenderId: "720403632329",
+  appId: "1:720403632329:web:9eba663d20a7c58ab13d18"
 };
 
 async function initFirebaseClient() {

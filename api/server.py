@@ -66,16 +66,15 @@ async def serve_dashboard():
 @app.get("/api/firebase-config")
 async def get_firebase_config():
     """
-    Returns the real Firebase configuration discovered and verified via Firebase MCP.
-    Allows frontend to dynamically authenticate and store items in Cloud Firestore.
+    Returns the dedicated Firebase configuration for project dailypilot-ai-2026.
     """
     return {
-        "apiKey": os.getenv("FIREBASE_API_KEY", "AIzaSyA83IoYuwWzuAlmU8lo3BbKSWq7ggCEB7U"),
-        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "ats-showcase-2026.firebaseapp.com"),
-        "projectId": os.getenv("FIREBASE_PROJECT_ID", "ats-showcase-2026"),
-        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "ats-showcase-2026.firebasestorage.app"),
-        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "123765295193"),
-        "appId": os.getenv("FIREBASE_APP_ID", "1:123765295193:web:cf3059e30129f024b3c948"),
+        "apiKey": os.getenv("FIREBASE_API_KEY", "AIzaSyC-tWI6IlbdpAe0FQ2D3c-vLdA4xoziocs"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", "dailypilot-ai-2026.firebaseapp.com"),
+        "projectId": os.getenv("FIREBASE_PROJECT_ID", "dailypilot-ai-2026"),
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", "dailypilot-ai-2026.firebasestorage.app"),
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", "720403632329"),
+        "appId": os.getenv("FIREBASE_APP_ID", "1:720403632329:web:9eba663d20a7c58ab13d18"),
     }
 
 
