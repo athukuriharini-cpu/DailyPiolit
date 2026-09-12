@@ -7,9 +7,12 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://python.org)
 [![Strands Agents SDK](https://img.shields.io/badge/Built_with-Strands_Agents_SDK-orange)](https://strandsagents.com)
+[![Firebase](https://img.shields.io/badge/Hosted_on-Firebase-ffca28?logo=firebase&logoColor=black)](https://ats-showcase-2026.web.app)
 [![Track](https://img.shields.io/badge/Track-Everyday_Agents-green)](https://devpost.com)
 
 **Agents for Humans Hackathon | AWS × Devpost 2026**
+
+🌐 **Live Deployed App**: **[https://ats-showcase-2026.web.app](https://ats-showcase-2026.web.app)**
 
 </div>
 
