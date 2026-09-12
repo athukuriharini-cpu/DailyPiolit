@@ -18,10 +18,16 @@ let auth = null;
 let db = null;
 
 // ── Application Initialization ───────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
-  await initFirebaseClient();
+function bootstrapApp() {
+  initFirebaseClient();
   loadSchedulerInfo();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrapApp);
+} else {
+  bootstrapApp();
+}
 
 const CLOUD_FIREBASE_CONFIG = {
   apiKey: "AIzaSyC-tWI6IlbdpAe0FQ2D3c-vLdA4xoziocs",
@@ -476,34 +482,6 @@ function updateKPIs() {
   document.getElementById('kpiBills').textContent = pendingBills.length;
   document.getElementById('kpiAlerts').textContent = openAlerts;
   document.getElementById('kpiTotal').textContent = '$' + totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-// ── CRUD: Tasks (Direct Cloud Firestore) ──────────────────────────────────────
-function openAddTaskModal() {
-  document.getElementById('taskFormId').value = '';
-  document.getElementById('taskModalTitle').textContent = 'Add New Task';
-  document.getElementById('taskFormTitle').value = '';
-  document.getElementById('taskFormCategory').value = 'general';
-  document.getElementById('taskFormPriority').value = 'medium';
-  document.getElementById('taskFormDueDate').value = '';
-  document.getElementById('taskFormStatus').value = 'pending';
-  document.getElementById('taskFormNotes').value = '';
-  openModal('taskModal');
-}
-
-function openEditTaskModal(id) {
-  const task = state.tasks.find(t => t.id === id);
-  if (!task) return;
-
-  document.getElementById('taskFormId').value = task.id;
-  document.getElementById('taskModalTitle').textContent = 'Edit Task';
-  document.getElementById('taskFormTitle').value = task.title;
-  document.getElementById('taskFormCategory').value = task.category;
-  document.getElementById('taskFormPriority').value = task.priority;
-  document.getElementById('taskFormDueDate').value = task.due_date || '';
-  document.getElementById('taskFormStatus').value = task.status;
-  document.getElementById('taskFormNotes').value = task.notes || '';
-  openModal('taskModal');
 }
 
 // ── CRUD: Tasks (Dual Cloud Firestore + Isolated Store) ─────────────────────
