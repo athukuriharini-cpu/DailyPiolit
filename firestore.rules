@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permanent Unlimited Cloud Firestore Rules for DailyPilot
+    // Lifetime access: No 30-day expiration, unlimited read/write for user collections.
+    match /users/{userId}/{document=**} {
+      allow read, write: if true;
+    }
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

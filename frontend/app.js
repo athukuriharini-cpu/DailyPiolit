@@ -33,14 +33,17 @@ const CLOUD_FIREBASE_CONFIG = {
 };
 
 async function initFirebaseClient() {
-  // Check for existing session first
+  // Check for existing session immediately (instant restore on refresh)
   try {
     const saved = localStorage.getItem('dailypilot_session_user');
     if (saved) {
       const u = JSON.parse(saved);
-      state.currentUser = u;
-      handleAuthGateState(u);
-      bindFirestoreListeners(u);
+      if (u && (u.uid || u.email)) {
+        state.currentUser = u;
+        document.documentElement.classList.add('session-authenticated');
+        handleAuthGateState(u);
+        bindFirestoreListeners(u);
+      }
     }
   } catch (e) {}
 
@@ -60,15 +63,32 @@ async function initFirebaseClient() {
       auth = firebase.auth();
       db = firebase.firestore();
 
+      // Ensure auth session persists across page refreshes
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
       auth.onAuthStateChanged((user) => {
         if (user) {
-          state.currentUser = user;
-          handleAuthGateState(user);
-          bindFirestoreListeners(user);
-        } else if (!localStorage.getItem('dailypilot_session_user')) {
-          state.currentUser = null;
-          handleAuthGateState(null);
-          unbindFirestoreListeners();
+          const sessionUser = {
+            uid: user.uid,
+            email: user.email || (user.isAnonymous ? 'guest@dailypilot.app' : 'user@dailypilot.app'),
+            displayName: user.displayName || (user.email ? user.email.split('@')[0] : 'Guest User'),
+            photoURL: user.photoURL || null,
+            isAnonymous: user.isAnonymous,
+            provider: user.providerData && user.providerData[0] ? user.providerData[0].providerId : (user.isAnonymous ? 'anonymous' : 'password'),
+          };
+          localStorage.setItem('dailypilot_session_user', JSON.stringify(sessionUser));
+          state.currentUser = sessionUser;
+          document.documentElement.classList.add('session-authenticated');
+          handleAuthGateState(sessionUser);
+          bindFirestoreListeners(sessionUser);
+        } else {
+          // Only disconnect if user explicitly signed out
+          if (!localStorage.getItem('dailypilot_session_user')) {
+            state.currentUser = null;
+            document.documentElement.classList.remove('session-authenticated');
+            handleAuthGateState(null);
+            unbindFirestoreListeners();
+          }
         }
       });
 
@@ -86,18 +106,29 @@ function handleAuthGateState(user) {
   const syncDot = document.getElementById('cloudSyncDot');
 
   if (user) {
-    // Dismiss Gate
-    gate.classList.add('hidden');
-    const displayEmail = user.email || (user.isAnonymous ? 'Guest User' : 'Authenticated');
-    userPillName.textContent = displayEmail;
-    syncDot.style.background = '#10b981';
-    syncDot.title = 'Cloud Firestore Live: ' + displayEmail;
+    // Dismiss Gate permanently for this session
+    document.documentElement.classList.add('session-authenticated');
+    if (gate) gate.classList.add('hidden');
+    const displayEmail = user.displayName || user.email || (user.isAnonymous ? 'Guest User' : 'Authenticated');
+    if (userPillName) userPillName.textContent = displayEmail;
+    if (syncDot) {
+      syncDot.style.background = '#10b981';
+      syncDot.title = 'Cloud Firestore Unlimited: ' + (user.email || displayEmail);
+    }
+    // Load local items immediately so UI is instant
+    state.tasks = getLocalItems(user.uid, 'tasks');
+    state.bills = getLocalItems(user.uid, 'bills');
+    state.alerts = getLocalItems(user.uid, 'alerts');
+    renderAll();
   } else {
     // Show Gate & reset view
-    gate.classList.remove('hidden');
-    userPillName.textContent = 'Sign In';
-    syncDot.style.background = '#94a3b8';
-    syncDot.title = 'Authentication Required';
+    document.documentElement.classList.remove('session-authenticated');
+    if (gate) gate.classList.remove('hidden');
+    if (userPillName) userPillName.textContent = 'Sign In';
+    if (syncDot) {
+      syncDot.style.background = '#94a3b8';
+      syncDot.title = 'Authentication Required';
+    }
     state.tasks = [];
     state.bills = [];
     state.alerts = [];
@@ -905,18 +936,276 @@ async function triggerAgentRun() {
   }
 }
 
-// ── Authentication Gate Methods with Seamless Failover ──────────────────────
-function createLocalUserSession(email, isGuest = false) {
+// ── Authentication Banner Feedback ──────────────────────────────────────────
+function showAuthError(msg) {
+  const el = document.getElementById('authErrorBanner');
+  if (el) {
+    el.innerHTML = `<span>⚠️</span><span>${escapeHTML(msg)}</span>`;
+    el.style.display = 'flex';
+  }
+}
+
+function clearAuthError() {
+  const el = document.getElementById('authErrorBanner');
+  if (el) {
+    el.innerHTML = '';
+    el.style.display = 'none';
+  }
+}
+
+// ── Google Authentication ───────────────────────────────────────────────────
+async function gateGoogleSignIn() {
+  clearAuthError();
+  const btn = document.getElementById('btnGoogleSignIn');
+  const label = document.getElementById('btnGoogleLabel');
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = 'Connecting Google...';
+
+  try {
+    if (auth) {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await auth.signInWithPopup(provider);
+      if (result && result.user) {
+        const u = result.user;
+        const sessionUser = {
+          uid: u.uid,
+          email: u.email,
+          displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'Google User'),
+          photoURL: u.photoURL || null,
+          isAnonymous: false,
+          provider: 'google.com',
+        };
+        localStorage.setItem('dailypilot_session_user', JSON.stringify(sessionUser));
+        state.currentUser = sessionUser;
+        document.documentElement.classList.add('session-authenticated');
+        handleAuthGateState(sessionUser);
+        bindFirestoreListeners(sessionUser);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[Google Auth Error]', err.code, err.message);
+    if (err.code === 'auth/popup-blocked') {
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithRedirect(provider);
+        return;
+      } catch (redirectErr) {
+        showAuthError('Popup blocked by browser. Please allow popups or use email sign in.');
+      }
+    } else if (err.code === 'auth/popup-closed-by-user') {
+      showAuthError('Google sign-in was cancelled.');
+    } else if (err.code === 'auth/unauthorized-domain') {
+      showAuthError('Google auth domain unauthorized. Please add this domain to Firebase Auth console.');
+    } else {
+      showAuthError(err.message || 'Google sign-in failed. Please try again.');
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (label) label.textContent = 'Sign in with Google';
+  }
+}
+
+// ── Email / Password Sign In with Strict Password Verification ──────────────
+async function gateEmailSignIn() {
+  clearAuthError();
+  const emailInput = document.getElementById('gateEmail');
+  const passInput = document.getElementById('gatePassword');
+  const email = emailInput.value.trim();
+  const pass = passInput.value;
+
+  if (!email) {
+    showAuthError('Please enter your email address.');
+    emailInput.focus();
+    return;
+  }
+  if (!pass) {
+    showAuthError('Please enter your password.');
+    passInput.focus();
+    return;
+  }
+  if (pass.length < 6) {
+    showAuthError('Password must be at least 6 characters.');
+    passInput.focus();
+    return;
+  }
+
+  const btn = document.getElementById('btnEmailSignIn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Verifying...';
+  }
+
+  try {
+    if (auth) {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const cred = await auth.signInWithEmailAndPassword(email, pass);
+      if (cred && cred.user) {
+        const u = cred.user;
+        const sessionUser = {
+          uid: u.uid,
+          email: u.email,
+          displayName: u.email.split('@')[0],
+          isAnonymous: false,
+          provider: 'password',
+        };
+        localStorage.setItem('dailypilot_session_user', JSON.stringify(sessionUser));
+        state.currentUser = sessionUser;
+        document.documentElement.classList.add('session-authenticated');
+        handleAuthGateState(sessionUser);
+        bindFirestoreListeners(sessionUser);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[Firebase Auth Error]', err.code, err.message);
+    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      showAuthError('Incorrect password. Please re-enter your password.');
+      passInput.focus();
+      return;
+    } else if (err.code === 'auth/user-not-found') {
+      showAuthError('No account found for this email. Click "Create Account" to register.');
+      return;
+    } else if (err.code === 'auth/invalid-email') {
+      showAuthError('Invalid email format. Please enter a valid email address.');
+      emailInput.focus();
+      return;
+    } else if (err.code === 'auth/too-many-requests') {
+      showAuthError('Too many failed attempts. Please wait a moment and try again.');
+      return;
+    } else {
+      showAuthError(err.message || 'Authentication failed. Please verify credentials.');
+      return;
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+}
+
+// ── Email / Password Sign Up with Password Strength Validation ──────────────
+async function gateEmailSignUp() {
+  clearAuthError();
+  const emailInput = document.getElementById('gateEmail');
+  const passInput = document.getElementById('gatePassword');
+  const email = emailInput.value.trim();
+  const pass = passInput.value;
+
+  if (!email) {
+    showAuthError('Please enter an email address to create an account.');
+    emailInput.focus();
+    return;
+  }
+  if (!pass) {
+    showAuthError('Please enter a password of at least 6 characters.');
+    passInput.focus();
+    return;
+  }
+  if (pass.length < 6) {
+    showAuthError('Password must be at least 6 characters long.');
+    passInput.focus();
+    return;
+  }
+
+  const btn = document.getElementById('btnEmailSignUp');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Creating Account...';
+  }
+
+  try {
+    if (auth) {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const cred = await auth.createUserWithEmailAndPassword(email, pass);
+      if (cred && cred.user) {
+        const u = cred.user;
+        const sessionUser = {
+          uid: u.uid,
+          email: u.email,
+          displayName: u.email.split('@')[0],
+          isAnonymous: false,
+          provider: 'password',
+        };
+        localStorage.setItem('dailypilot_session_user', JSON.stringify(sessionUser));
+        state.currentUser = sessionUser;
+        document.documentElement.classList.add('session-authenticated');
+        handleAuthGateState(sessionUser);
+        bindFirestoreListeners(sessionUser);
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[Firebase Sign Up Error]', err.code, err.message);
+    if (err.code === 'auth/email-already-in-use') {
+      showAuthError('This email is already registered. Please click "Sign In" with your password.');
+      return;
+    } else if (err.code === 'auth/weak-password') {
+      showAuthError('Password is too weak. Please use at least 6 characters.');
+      return;
+    } else if (err.code === 'auth/invalid-email') {
+      showAuthError('Invalid email format. Please enter a valid email.');
+      return;
+    } else {
+      showAuthError(err.message || 'Account creation failed. Please try again.');
+      return;
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Create Account';
+    }
+  }
+}
+
+// ── One-Click Guest Access ──────────────────────────────────────────────────
+async function gateAnonymousSignIn() {
+  clearAuthError();
+  try {
+    if (auth) {
+      await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      const cred = await auth.signInAnonymously();
+      if (cred && cred.user) {
+        const sessionUser = {
+          uid: cred.user.uid,
+          email: 'guest@dailypilot.app',
+          displayName: 'Guest User',
+          isAnonymous: true,
+          provider: 'anonymous',
+        };
+        localStorage.setItem('dailypilot_session_user', JSON.stringify(sessionUser));
+        state.currentUser = sessionUser;
+        document.documentElement.classList.add('session-authenticated');
+        handleAuthGateState(sessionUser);
+        bindFirestoreListeners(sessionUser);
+        return;
+      }
+    }
+  } catch (err) {
+    console.info('[Firebase Auth notice] Activating guest session:', err.code || err.message);
+  }
+
+  // Resilient failover
+  createLocalUserSession('guest@dailypilot.app', true, 'Guest User');
+}
+
+// ── User Session Creation Helper ────────────────────────────────────────────
+function createLocalUserSession(email, isGuest = false, customDisplayName = null) {
   const cleanEmail = email || (isGuest ? 'guest@dailypilot.app' : 'user@dailypilot.app');
   const uid = 'usr_' + Math.abs(hashString(cleanEmail)).toString(16) + (isGuest ? '_gst' : '');
   const sessionUser = {
     uid: uid,
     email: cleanEmail,
-    displayName: cleanEmail.split('@')[0],
+    displayName: customDisplayName || cleanEmail.split('@')[0],
     isAnonymous: isGuest,
+    provider: isGuest ? 'anonymous' : 'local',
   };
   localStorage.setItem('dailypilot_session_user', JSON.stringify(sessionUser));
   state.currentUser = sessionUser;
+  document.documentElement.classList.add('session-authenticated');
   handleAuthGateState(sessionUser);
   bindFirestoreListeners(sessionUser);
   return sessionUser;
@@ -931,63 +1220,30 @@ function hashString(str) {
   return hash;
 }
 
-async function gateEmailSignIn() {
-  const email = document.getElementById('gateEmail').value.trim();
-  const pass = document.getElementById('gatePassword').value;
-  if (!email || !pass) return alert('Please enter both email and password.');
-
-  try {
-    if (auth) {
-      await auth.signInWithEmailAndPassword(email, pass);
-      return;
-    }
-  } catch (err) {
-    console.info('[Firebase Auth notice] Activating seamless authenticated session:', err.code || err.message);
-  }
-
-  // Seamless failover: Create authenticated session directly without error
-  createLocalUserSession(email, false);
-}
-
-async function gateEmailSignUp() {
-  const email = document.getElementById('gateEmail').value.trim();
-  const pass = document.getElementById('gatePassword').value;
-  if (!email || !pass) return alert('Please enter both email and password.');
-
-  try {
-    if (auth) {
-      await auth.createUserWithEmailAndPassword(email, pass);
-      return;
-    }
-  } catch (err) {
-    console.info('[Firebase Auth notice] Activating seamless authenticated session:', err.code || err.message);
-  }
-
-  // Seamless failover: Create authenticated session directly without error
-  createLocalUserSession(email, false);
-}
-
-async function gateAnonymousSignIn() {
-  try {
-    if (auth) {
-      await auth.signInAnonymously();
-      return;
-    }
-  } catch (err) {
-    console.info('[Firebase Auth notice] Activating guest session:', err.code || err.message);
-  }
-
-  // Seamless failover
-  createLocalUserSession('guest@dailypilot.app', true);
-}
-
+// ── Sign Out ─────────────────────────────────────────────────────────────────
 async function handleSignOut() {
+  document.documentElement.classList.remove('session-authenticated');
   localStorage.removeItem('dailypilot_session_user');
   if (auth) {
     try { await auth.signOut(); } catch (e) {}
   }
   state.currentUser = null;
   handleAuthGateState(null);
+}
+
+// ── Open User Modal ──────────────────────────────────────────────────────────
+function openUserModal() {
+  if (!state.currentUser) return;
+  const emailEl = document.getElementById('userModalEmail');
+  const uidEl = document.getElementById('userModalUid');
+  const avatarEl = document.getElementById('userModalAvatar');
+
+  const display = state.currentUser.displayName || state.currentUser.email || 'User';
+  if (emailEl) emailEl.textContent = state.currentUser.email || display;
+  if (uidEl) uidEl.textContent = 'UID: ' + state.currentUser.uid;
+  if (avatarEl) avatarEl.textContent = display.charAt(0).toUpperCase();
+
+  openModal('userModal');
 }
 
 // ── Scheduler Controls ───────────────────────────────────────────────────────

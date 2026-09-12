@@ -14,6 +14,21 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <!-- Instant pre-paint session check so auth gate never pops up on page refresh -->
+  <script>
+    (function() {
+      try {
+        var _sess = localStorage.getItem('dailypilot_session_user');
+        if (_sess) {
+          var _u = JSON.parse(_sess);
+          if (_u && (_u.uid || _u.email)) {
+            document.documentElement.classList.add('session-authenticated');
+          }
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <!-- ── Ambient Glowing Aurora Lighting ── -->
@@ -31,23 +46,40 @@
         <h2 class="auth-gate-title">Welcome to DailyPilot</h2>
         <p class="auth-gate-subtitle">
           Sign in to access your personal AI agent workspace.<br/>
-          Your real tasks, bills, and briefings are stored securely in your private <strong>Cloud Firestore</strong> database.
+          Your real tasks, bills, and briefings are stored in your private <strong>Cloud Firestore</strong> database.
         </p>
+        <div class="plan-pill-tag">✨ Unlimited Lifetime Account · No 30-Day Limits</div>
       </div>
 
       <div class="auth-card-body">
+        <!-- Live Auth Error Banner -->
+        <div class="auth-error-banner" id="authErrorBanner" style="display: none;"></div>
+
+        <!-- Google Authentication Button -->
+        <button class="btn btn-google" id="btnGoogleSignIn" onclick="gateGoogleSignIn()">
+          <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.97 0 12s.45 3.84 1.25 5.42l4.03-3.15z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+          </svg>
+          <span id="btnGoogleLabel">Sign in with Google</span>
+        </button>
+
+        <div class="auth-divider"><span>OR CONTINUE WITH EMAIL</span></div>
+
         <div class="form-row">
           <label>Email Address</label>
           <input type="email" class="form-input" id="gateEmail" placeholder="you@example.com" />
         </div>
         <div class="form-row">
           <label>Password</label>
-          <input type="password" class="form-input" id="gatePassword" placeholder="••••••••" />
+          <input type="password" class="form-input" id="gatePassword" placeholder="Minimum 6 characters" />
         </div>
 
         <div class="auth-gate-btn-row">
-          <button class="btn btn-primary-glow" style="flex: 1;" onclick="gateEmailSignIn()">Sign In</button>
-          <button class="btn btn-outline" style="flex: 1;" onclick="gateEmailSignUp()">Create Account</button>
+          <button class="btn btn-primary-glow" id="btnEmailSignIn" style="flex: 1;" onclick="gateEmailSignIn()">Sign In</button>
+          <button class="btn btn-outline" id="btnEmailSignUp" style="flex: 1;" onclick="gateEmailSignUp()">Create Account</button>
         </div>
 
         <div class="auth-divider"><span>OR ONE-CLICK GUEST ACCESS</span></div>
@@ -57,7 +89,8 @@
         </button>
 
         <div class="auth-gate-footer-note">
-          🔒 Powered by Firebase Authentication & Cloud Firestore (<code>dailypilot-ai-2026</code>)
+          🔒 Powered by Firebase Auth & Cloud Firestore (<code>dailypilot-ai-2026</code>)<br/>
+          <strong>Permanent Cloud Storage · No 30-day trial cutoff</strong>
         </div>
       </div>
     </div>
@@ -84,8 +117,11 @@
 
       <!-- Right Action Hub: User Profile, Scheduler, Trigger -->
       <div class="header-actions">
+        <!-- Unlimited Tier Badge -->
+        <span class="unlimited-badge" title="Lifetime Unlimited Account">✨ Unlimited Lifetime</span>
+
         <!-- Firebase User Pill -->
-        <div class="firebase-user-pill" id="firebaseUserPill">
+        <div class="firebase-user-pill" id="firebaseUserPill" onclick="openUserModal()" title="View User Account & Cloud Plan">
           <span class="firebase-icon">🔥</span>
           <span class="user-display-name" id="userDisplayName">Signed In</span>
           <span class="cloud-sync-status" id="cloudSyncDot" title="Firestore Connected"></span>
@@ -448,6 +484,51 @@
           <button class="btn btn-primary-glow" onclick="triggerAgentRun(); closeModal('scheduleModal');">
             ▶ Trigger Instant Run
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: User Profile & Unlimited Cloud Plan ── -->
+  <div class="modal-backdrop" id="userModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>👤 User Profile & Cloud Plan</h3>
+        <button class="modal-close-btn" onclick="closeModal('userModal')">✕</button>
+      </div>
+      <div class="schedule-body">
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding: 16px; background: var(--bg-subtle); border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #06b6d4); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem;" id="userModalAvatar">U</div>
+          <div style="flex: 1; overflow: hidden;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="userModalEmail">user@example.com</div>
+            <div style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono); margin-top: 2px;" id="userModalUid">UID: usr_...</div>
+          </div>
+        </div>
+
+        <div class="status-box mb-3">
+          <div>
+            <div class="stat-meta">Active Account Tier</div>
+            <div class="stat-status-value" style="color: var(--glow-emerald); font-size: 1rem;">✨ Unlimited Lifetime Access</div>
+          </div>
+          <div class="text-dim text-xs" style="margin-top: 4px;">
+            Permanent Cloud Firestore integration. No 30-day limits, no trial cutoffs.
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px;">
+          <div style="padding: 12px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+            <div style="font-size: 0.72rem; color: var(--text-dim); font-weight: 700;">DATABASE</div>
+            <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); margin-top: 2px;">Cloud Firestore</div>
+          </div>
+          <div style="padding: 12px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+            <div style="font-size: 0.72rem; color: var(--text-dim); font-weight: 700;">EXPIRATION</div>
+            <div style="font-size: 0.82rem; font-weight: 700; color: var(--glow-emerald); margin-top: 2px;">Never (Permanent)</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-outline" style="flex: 1;" onclick="closeModal('userModal')">Close</button>
+          <button class="btn btn-primary-glow" style="flex: 1;" onclick="closeModal('userModal'); handleSignOut();">Sign Out</button>
         </div>
       </div>
     </div>
