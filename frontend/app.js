@@ -23,6 +23,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadSchedulerInfo();
 });
 
+const CLOUD_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyA83IoYuwWzuAlmU8lo3BbKSWq7ggCEB7U",
+  authDomain: "ats-showcase-2026.firebaseapp.com",
+  projectId: "ats-showcase-2026",
+  storageBucket: "ats-showcase-2026.firebasestorage.app",
+  messagingSenderId: "123765295193",
+  appId: "1:123765295193:web:cf3059e30129f024b3c948"
+};
+
 async function initFirebaseClient() {
   // Check for existing session first
   try {
@@ -35,10 +44,17 @@ async function initFirebaseClient() {
     }
   } catch (e) {}
 
+  let firebaseConfig = CLOUD_FIREBASE_CONFIG;
   try {
     const configRes = await fetch('/api/firebase-config');
-    const firebaseConfig = await configRes.json();
+    if (configRes.ok) {
+      firebaseConfig = await configRes.json();
+    }
+  } catch (err) {
+    console.info('[Firebase] Using embedded cloud config for hosted app.');
+  }
 
+  try {
     if (window.firebase && !firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
       auth = firebase.auth();
@@ -742,7 +758,65 @@ async function deleteAlert(id) {
   }
 }
 
-// ── Autonomous Agent Execution for User's Real Items ─────────────────────────
+// ── Autonomous Agent Execution (Dual Cloud Backend + Static Hosting Mode) ──
+function runClientSideAutonomousAudit(userId, tasks, bills) {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  if (!tasks.length && !bills.length) {
+    return {
+      briefing: `# 🧭 DailyPilot Personal Briefing\n**${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}** · Generated at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n---\n\n## 📋 Workspace Status: Clean & Ready\n\nYou haven't added any tasks or bills yet.\n- Click **+ Add Task** to enter real to-dos, deadlines, or appointments.\n- Click **+ Add Bill** to track monthly expenses and enable anomaly detection.\n\n_Once you add items, DailyPilot autonomously audits them on your schedule._`,
+      alerts: [],
+      tasks_handled: 0,
+      alerts_raised: 0,
+    };
+  }
+
+  const overdueTasks = tasks.filter(t => t.due_date && t.due_date < todayStr && t.status !== 'done');
+  const dueTodayTasks = tasks.filter(t => t.due_date === todayStr && t.status !== 'done');
+
+  const categoryThresholds = { utilities: 200, subscriptions: 35, housing: 2500, finance: 600, insurance: 400, general: 150 };
+  const anomalousBills = bills.filter(b => {
+    const limit = categoryThresholds[b.category] || 150;
+    return parseFloat(b.amount || 0) > limit * 1.5;
+  });
+
+  const alerts = [];
+  anomalousBills.forEach(b => {
+    alerts.push({
+      title: `Unusual Charge: ${b.name} ($${parseFloat(b.amount).toFixed(2)})`,
+      description: `Amount exceeds standard threshold for ${b.category}.\n💡 Recommended action: Review itemized statement before payment.`,
+      severity: 'high',
+    });
+  });
+  overdueTasks.forEach(t => {
+    alerts.push({
+      title: `Overdue Deadline: ${t.title}`,
+      description: `Task deadline has passed.\n💡 Recommended action: Complete or reschedule today.`,
+      severity: 'medium',
+    });
+  });
+
+  const totalBillAmount = bills.reduce((acc, b) => acc + (parseFloat(b.amount) || 0), 0);
+
+  let md = `# 🧭 DailyPilot Personal Briefing\n**${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}** · Generated at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n---\n\n## ✅ Autonomous Audit Summary\n\n| Category | Tracked | Status |\n|---|---|---|\n| **Active Tasks** | ${tasks.length} | ${overdueTasks.length} Overdue · ${dueTodayTasks.length} Due Today |\n| **Active Bills** | ${bills.length} | Total Obligation: $${totalBillAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} |\n| **Decision Escalations** | ${alerts.length} | Items Requiring Your Approval |\n\n`;
+
+  if (alerts.length) {
+    md += `## 🚨 Items Requiring Your Human Attention\n\n`;
+    alerts.forEach(a => { md += `- 🔴 **${a.title}**\n  ${a.description.split('\n')[0]}\n\n`; });
+  } else {
+    md += `## ✨ You're All Clear!\nNo anomalies or urgent overdue items detected. Everything is on schedule.\n\n`;
+  }
+  md += `---\n\n_DailyPilot running autonomously on Cloud Firestore & Firebase Hosting._\n`;
+
+  return {
+    briefing: md,
+    alerts: alerts,
+    tasks_handled: tasks.length + bills.length,
+    alerts_raised: alerts.length,
+  };
+}
+
 async function triggerAgentRun() {
   if (!state.currentUser) return alert('Please sign in first.');
 
@@ -756,6 +830,8 @@ async function triggerAgentRun() {
   banner.style.display = 'flex';
   pulse.className = 'pulse-ring running';
 
+  let result = null;
+
   try {
     const res = await fetch('/api/run-agent', {
       method: 'POST',
@@ -766,10 +842,20 @@ async function triggerAgentRun() {
         bills: state.bills,
       }),
     });
+    if (res.ok) {
+      result = await res.json();
+    }
+  } catch (err) {
+    console.info('[Agent] Server API offline, executing autonomous client sweep.');
+  }
 
-    const result = await res.json();
+  // Fallback to client autonomous sweep if server is offline or on static hosting
+  if (!result) {
+    result = runClientSideAutonomousAudit(state.currentUser.uid, state.tasks, state.bills);
+  }
 
-    if (result.briefing) {
+  try {
+    if (result && result.briefing) {
       const briefObj = {
         id: 'brf_' + Date.now(),
         content: result.briefing,
@@ -788,7 +874,7 @@ async function triggerAgentRun() {
       }
     }
 
-    if (result.alerts && result.alerts.length) {
+    if (result && result.alerts && result.alerts.length) {
       for (const al of result.alerts) {
         const altObj = {
           id: 'alt_' + Date.now() + Math.random().toString(16).slice(2, 6),
@@ -809,9 +895,8 @@ async function triggerAgentRun() {
       renderAlerts();
       updateKPIs();
     }
-
   } catch (err) {
-    alert('Agent run error: ' + err.message);
+    console.error('Agent audit error:', err);
   } finally {
     btn.disabled = false;
     label.textContent = 'Run Agent Now';

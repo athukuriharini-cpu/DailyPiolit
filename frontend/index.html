@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DailyPilot — Pure White AI Life Co-Pilot</title>
+  <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -452,6 +453,18 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script>
+    // Universal loader for app.js
+    (function() {
+      var s = document.createElement('script');
+      s.src = '/app.js';
+      s.onerror = function() {
+        var s2 = document.createElement('script');
+        s2.src = '/static/app.js';
+        document.body.appendChild(s2);
+      };
+      document.body.appendChild(s);
+    })();
+  </script>
 </body>
 </html>
