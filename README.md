@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.jpg" alt="DailyPilot Logo" width="140" style="border-radius: 28px; box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2);" />
+
 # 🧭 DailyPilot
 
 ### *Your AI co-pilot for daily life — runs quietly, acts fast, pings you only when it matters.*
