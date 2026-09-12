@@ -1,0 +1,6 @@
+strands-agents>=1.0.0
+strands-agents-tools>=0.2.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+apscheduler>=3.10.4
+python-dotenv>=1.0.0

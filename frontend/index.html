@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DailyPilot — Pure White AI Life Co-Pilot</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Firebase SDKs (Compat version for zero-build static browser execution) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <!-- ── Ambient Glowing Aurora Background ── -->
+  <div class="aurora-canvas">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+  </div>
+
+  <!-- ── Top Navigation Bar ── -->
+  <header class="header">
+    <div class="header-container">
+      <div class="brand-group">
+        <div class="brand-icon-wrap">
+          <span class="brand-icon">🧭</span>
+        </div>
+        <div>
+          <div class="brand-title">DailyPilot<span class="glow-dot"></span></div>
+          <div class="brand-subtitle">Autonomous Everyday AI Agent · Pure White</div>
+        </div>
+      </div>
+
+      <!-- Center Status / Agent Heartbeat -->
+      <div class="agent-heartbeat-badge" id="agentBadge">
+        <span class="pulse-ring" id="agentPulse"></span>
+        <span class="heartbeat-text" id="agentStatusText">Agent Idle · Ready</span>
+      </div>
+
+      <!-- Right Action Hub: Firebase Auth & Trigger -->
+      <div class="header-actions">
+        <!-- Firebase User Pill -->
+        <div class="firebase-user-pill" id="firebaseUserPill" onclick="openAuthModal()">
+          <span class="firebase-icon">🔥</span>
+          <span class="user-display-name" id="userDisplayName">Sign in / Firebase</span>
+          <span class="cloud-sync-status" id="cloudSyncDot" title="Firestore Connected"></span>
+        </div>
+
+        <!-- Schedule Settings Button -->
+        <button class="btn btn-outline" onclick="openScheduleModal()" title="Autonomous Scheduler Settings">
+          ⏱️ Schedule
+        </button>
+
+        <!-- Run Agent Now Button -->
+        <button class="btn btn-glowing-primary" id="runAgentBtn" onclick="triggerAgentRun()">
+          <span class="btn-sparkle">✨</span>
+          <span id="runBtnLabel">Run Agent Now</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Workspace ── -->
+  <main class="main-wrapper">
+
+    <!-- Active Running Banner -->
+    <div class="active-run-banner" id="activeRunBanner" style="display: none;">
+      <div class="runner-spinner"></div>
+      <div class="banner-content">
+        <strong>DailyPilot is performing autonomous sweep:</strong> scanning tasks, comparing bill thresholds, dispatching routine reminders, and evaluating decision escalations...
+      </div>
+    </div>
+
+    <!-- ── Hero KPI Metrics ── -->
+    <section class="kpi-grid">
+      <div class="kpi-card card-glow-indigo">
+        <div class="kpi-header">
+          <span class="kpi-title">Pending Tasks</span>
+          <span class="kpi-icon">📋</span>
+        </div>
+        <div class="kpi-value" id="kpiTasks">–</div>
+        <div class="kpi-footer" id="kpiTasksSub">Organized by urgency</div>
+      </div>
+
+      <div class="kpi-card card-glow-amber">
+        <div class="kpi-header">
+          <span class="kpi-title">Upcoming Bills</span>
+          <span class="kpi-icon">💳</span>
+        </div>
+        <div class="kpi-value" id="kpiBills">–</div>
+        <div class="kpi-footer" id="kpiBillsSub">Automated checks active</div>
+      </div>
+
+      <div class="kpi-card card-glow-rose">
+        <div class="kpi-header">
+          <span class="kpi-title">Human Decisions</span>
+          <span class="kpi-icon">🚨</span>
+        </div>
+        <div class="kpi-value text-rose" id="kpiAlerts">–</div>
+        <div class="kpi-footer">Escalated for your approval</div>
+      </div>
+
+      <div class="kpi-card card-glow-emerald">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Obligation</span>
+          <span class="kpi-icon">💰</span>
+        </div>
+        <div class="kpi-value text-emerald" id="kpiTotal">–</div>
+        <div class="kpi-footer" id="kpiTotalSub">Audit in background</div>
+      </div>
+    </section>
+
+    <!-- ── Main 2-Column Split ── -->
+    <div class="workspace-layout">
+
+      <!-- ── Left Column: Decision Center & Tasks ── -->
+      <div class="layout-column">
+
+        <!-- Escalated Decisions Panel -->
+        <section class="luminous-card">
+          <div class="card-top-bar">
+            <div class="card-heading-group">
+              <h2 class="card-heading">🚨 Needs Your Decision</h2>
+              <span class="luminous-badge badge-rose" id="alertsCountBadge">0</span>
+            </div>
+            <div class="card-actions-group">
+              <button class="btn btn-xs btn-outline" onclick="openAddAlertModal()">+ Alert</button>
+            </div>
+          </div>
+          <div class="card-body scrollable-pane" id="alertsContainer">
+            <div class="empty-state">
+              <div class="empty-icon">✨</div>
+              <p><strong>All clear!</strong> No items currently require human judgment.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tasks Management Panel (Full CRUD) -->
+        <section class="luminous-card">
+          <div class="card-top-bar">
+            <div class="card-heading-group">
+              <h2 class="card-heading">📋 Tasks & To-Dos</h2>
+              <span class="luminous-badge badge-indigo" id="tasksCountBadge">0</span>
+            </div>
+            <div class="card-actions-group">
+              <select class="clean-select" id="taskFilter" onchange="applyTaskFilter()">
+                <option value="all">All Tasks</option>
+                <option value="pending" selected>Pending</option>
+                <option value="reminded">Reminded</option>
+                <option value="done">Completed</option>
+              </select>
+              <button class="btn btn-xs btn-primary-glow" onclick="openAddTaskModal()">+ Add Task</button>
+            </div>
+          </div>
+          <div class="card-body scrollable-pane" id="tasksContainer">
+            <!-- Dynamic task items -->
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ── Right Column: AI Briefing & Bills ── -->
+      <div class="layout-column">
+
+        <!-- AI Daily Briefing Panel -->
+        <section class="luminous-card briefing-panel">
+          <div class="card-top-bar">
+            <div class="card-heading-group">
+              <h2 class="card-heading">🧭 Autonomous Briefing</h2>
+              <span class="luminous-badge badge-cyan" id="briefingDateBadge">Today</span>
+            </div>
+            <div class="card-actions-group">
+              <button class="btn btn-xs btn-outline" onclick="loadBriefing()">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="card-body scrollable-pane briefing-render-box" id="briefingContent">
+            <div class="empty-state">
+              <div class="empty-icon">☕</div>
+              <p>No briefing generated yet.<br/><span class="text-dim">Click <strong>"Run Agent Now"</strong> to let DailyPilot compile your morning report.</span></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bills & Financial Tracker (Full CRUD) -->
+        <section class="luminous-card">
+          <div class="card-top-bar">
+            <div class="card-heading-group">
+              <h2 class="card-heading">💳 Bills & Recurring Charges</h2>
+              <span class="luminous-badge badge-amber" id="billsCountBadge">0</span>
+            </div>
+            <div class="card-actions-group">
+              <select class="clean-select" id="billFilter" onchange="applyBillFilter()">
+                <option value="pending" selected>Pending</option>
+                <option value="all">All Bills</option>
+                <option value="paid">Paid</option>
+              </select>
+              <button class="btn btn-xs btn-primary-glow" onclick="openAddBillModal()">+ Add Bill</button>
+            </div>
+          </div>
+          <div class="card-body scrollable-pane" id="billsContainer">
+            <!-- Dynamic bills items -->
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- ── Data Reset & Wipe Bar ── -->
+    <div class="quick-management-bar">
+      <span>⚙️ <strong>Workspace Controls:</strong> Want a fresh slate or to test sample records?</span>
+      <div class="quick-actions">
+        <button class="btn btn-xs btn-danger-outline" onclick="clearAllDataPrompt()">Clear All Data</button>
+        <button class="btn btn-xs btn-outline" onclick="resetSampleDataPrompt()">Reload Realistic Samples</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── MODAL: Add / Edit Task ── -->
+  <div class="modal-backdrop" id="taskModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="taskModalTitle">Add New Task</h3>
+        <button class="modal-close-btn" onclick="closeModal('taskModal')">✕</button>
+      </div>
+      <form id="taskForm" onsubmit="saveTaskSubmit(event)">
+        <input type="hidden" id="taskFormId" value="" />
+        <div class="form-row">
+          <label>Task Description *</label>
+          <input type="text" class="form-input" id="taskFormTitle" placeholder="e.g. Pay gym membership or renew car registration" required />
+        </div>
+        <div class="form-cols">
+          <div class="form-row">
+            <label>Category</label>
+            <select class="form-input" id="taskFormCategory">
+              <option value="health">Health & Medical</option>
+              <option value="finance">Finance & Banking</option>
+              <option value="home">Home & Utilities</option>
+              <option value="family">Family & Personal</option>
+              <option value="errands">Errands & Auto</option>
+              <option value="travel">Travel & Booking</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Priority</label>
+            <select class="form-input" id="taskFormPriority">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-cols">
+          <div class="form-row">
+            <label>Due Date</label>
+            <input type="date" class="form-input" id="taskFormDueDate" />
+          </div>
+          <div class="form-row">
+            <label>Status</label>
+            <select class="form-input" id="taskFormStatus">
+              <option value="pending">Pending</option>
+              <option value="reminded">Reminded</option>
+              <option value="done">Done / Completed</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Notes / Context</label>
+          <input type="text" class="form-input" id="taskFormNotes" placeholder="Optional context or instructions for agent" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('taskModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary-glow" id="taskSubmitBtn">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Add / Edit Bill ── -->
+  <div class="modal-backdrop" id="billModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="billModalTitle">Add New Bill</h3>
+        <button class="modal-close-btn" onclick="closeModal('billModal')">✕</button>
+      </div>
+      <form id="billForm" onsubmit="saveBillSubmit(event)">
+        <input type="hidden" id="billFormId" value="" />
+        <div class="form-row">
+          <label>Bill Name / Payee *</label>
+          <input type="text" class="form-input" id="billFormName" placeholder="e.g. Electric Utility, Netflix, Spectrum" required />
+        </div>
+        <div class="form-cols">
+          <div class="form-row">
+            <label>Amount Due ($) *</label>
+            <input type="number" step="0.01" class="form-input" id="billFormAmount" placeholder="0.00" required />
+          </div>
+          <div class="form-row">
+            <label>Due Date *</label>
+            <input type="date" class="form-input" id="billFormDueDate" required />
+          </div>
+        </div>
+        <div class="form-cols">
+          <div class="form-row">
+            <label>Category</label>
+            <select class="form-input" id="billFormCategory">
+              <option value="utilities">Utilities (Electric, Water, Gas)</option>
+              <option value="subscriptions">Subscriptions & Media</option>
+              <option value="housing">Housing & Rent</option>
+              <option value="finance">Loans & Credit</option>
+              <option value="insurance">Insurance</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Status</label>
+            <select class="form-input" id="billFormStatus">
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="billFormRecurring" checked />
+            <span>Recurring monthly bill</span>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Notes / Billing Details</label>
+          <input type="text" class="form-input" id="billFormNotes" placeholder="Account #, auto-pay status, or history" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('billModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary-glow" id="billSubmitBtn">Save Bill</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Schedule Controls ── -->
+  <div class="modal-backdrop" id="scheduleModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>⏱️ Autonomous Agent Scheduling</h3>
+        <button class="modal-close-btn" onclick="closeModal('scheduleModal')">✕</button>
+      </div>
+      <div class="schedule-body">
+        <p class="text-dim mb-3">Configure how frequently the Strands Agent awakens in the background to scan tasks, detect bill anomalies, and issue reminders.</p>
+        
+        <div class="status-box">
+          <div>
+            <div class="stat-meta">Current Schedule Status</div>
+            <div class="stat-status-value" id="schedActiveStatus">Active · Running every 1 hour</div>
+          </div>
+          <div id="schedNextRun" class="text-dim text-xs">Next run: calculating...</div>
+        </div>
+
+        <div class="form-row mt-3">
+          <label>Run Interval Frequency</label>
+          <select class="form-input" id="schedIntervalSelect" onchange="changeScheduleInterval(this.value)">
+            <option value="300">Every 5 Minutes (Demo Speed)</option>
+            <option value="900">Every 15 Minutes</option>
+            <option value="1800">Every 30 Minutes</option>
+            <option value="3600" selected>Every 1 Hour (Recommended)</option>
+            <option value="21600">Every 6 Hours</option>
+            <option value="86400">Once Daily (24 Hours)</option>
+          </select>
+        </div>
+
+        <div class="schedule-toggle-row">
+          <button class="btn btn-outline" id="pauseResumeBtn" onclick="toggleSchedulePause()">
+            ⏸️ Pause Scheduler
+          </button>
+          <button class="btn btn-primary-glow" onclick="triggerAgentRun(); closeModal('scheduleModal');">
+            ▶ Trigger Instant Run
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Firebase Auth & Cloud Sync ── -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.5rem">🔥</span>
+          <h3>Firebase Authentication & Firestore</h3>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('authModal')">✕</button>
+      </div>
+      <div class="auth-box-body">
+        <div id="authLoggedOutView">
+          <p class="text-dim mb-3">Sign in to sync your personal daily tasks and bills directly with <strong>Google Cloud Firestore</strong>.</p>
+          
+          <div class="form-row">
+            <label>Email Address</label>
+            <input type="email" class="form-input" id="authEmail" placeholder="your-email@domain.com" />
+          </div>
+          <div class="form-row">
+            <label>Password</label>
+            <input type="password" class="form-input" id="authPassword" placeholder="••••••••" />
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:14px;">
+            <button class="btn btn-primary-glow" style="flex:1" onclick="handleEmailSignIn()">Sign In</button>
+            <button class="btn btn-outline" style="flex:1" onclick="handleEmailSignUp()">Sign Up</button>
+          </div>
+
+          <div class="auth-divider"><span>OR QUICK GUEST LOGIN</span></div>
+
+          <button class="btn btn-glowing-mint" style="width:100%" onclick="handleAnonymousSignIn()">
+            ⚡ 1-Click Instant Guest Sign In
+          </button>
+        </div>
+
+        <div id="authLoggedInView" style="display:none;">
+          <div class="user-card-highlight">
+            <div class="avatar-circle" id="userAvatar">U</div>
+            <div>
+              <div class="user-card-name" id="userCardEmail">user@domain.com</div>
+              <div class="user-card-uid" id="userCardUid">UID: ...</div>
+            </div>
+          </div>
+          <div class="cloud-sync-info-box">
+            <span class="icon-sync">☁️</span>
+            <div>
+              <strong>Firestore Real-Time Database Active</strong>
+              <div class="text-xs text-dim">Changes persist to project <code>ats-showcase-2026</code>.</div>
+            </div>
+          </div>
+          <div class="modal-footer" style="margin-top:20px;">
+            <button class="btn btn-danger-outline" onclick="handleSignOut()">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Add Custom Decision / Alert ── -->
+  <div class="modal-backdrop" id="alertModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>🚨 Create Custom Human Decision / Alert</h3>
+        <button class="modal-close-btn" onclick="closeModal('alertModal')">✕</button>
+      </div>
+      <form id="alertForm" onsubmit="saveAlertSubmit(event)">
+        <div class="form-row">
+          <label>Alert Title *</label>
+          <input type="text" class="form-input" id="alertFormTitle" placeholder="e.g. Subscription Price Increased by $10" required />
+        </div>
+        <div class="form-row">
+          <label>Severity</label>
+          <select class="form-input" id="alertFormSeverity">
+            <option value="low">Low (FYI)</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High (Action Needed)</option>
+            <option value="critical">Critical (Immediate Decision)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Explanation & Context *</label>
+          <textarea class="form-input" id="alertFormDesc" rows="3" placeholder="Explain why human attention is required" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('alertModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary-glow">Create Alert</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
