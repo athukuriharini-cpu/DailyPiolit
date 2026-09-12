@@ -999,6 +999,8 @@ async function gateGoogleSignIn() {
       showAuthError('Google sign-in was cancelled.');
     } else if (err.code === 'auth/unauthorized-domain') {
       showAuthError('Google auth domain unauthorized. Please add this domain to Firebase Auth console.');
+    } else if (err.code === 'auth/operation-not-allowed') {
+      showAuthError('Google provider is not enabled in Firebase Console yet. Please enable it in Firebase Console > Authentication > Sign-in method.');
     } else {
       showAuthError(err.message || 'Google sign-in failed. Please try again.');
     }
@@ -1075,6 +1077,9 @@ async function gateEmailSignIn() {
     } else if (err.code === 'auth/too-many-requests') {
       showAuthError('Too many failed attempts. Please wait a moment and try again.');
       return;
+    } else if (err.code === 'auth/operation-not-allowed') {
+      showAuthError('Email/Password provider is not enabled in Firebase Console yet. Please enable it in Firebase Console > Authentication > Sign-in method.');
+      return;
     } else {
       showAuthError(err.message || 'Authentication failed. Please verify credentials.');
       return;
@@ -1148,6 +1153,9 @@ async function gateEmailSignUp() {
       return;
     } else if (err.code === 'auth/invalid-email') {
       showAuthError('Invalid email format. Please enter a valid email.');
+      return;
+    } else if (err.code === 'auth/operation-not-allowed') {
+      showAuthError('Email/Password provider is not enabled in Firebase Console yet. Please enable it in Firebase Console > Authentication > Sign-in method.');
       return;
     } else {
       showAuthError(err.message || 'Account creation failed. Please try again.');
