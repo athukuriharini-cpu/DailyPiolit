@@ -93,20 +93,99 @@ body {
   animation-duration: 22s;
 }
 
-.orb-3 {
-  width: 450px;
-  height: 450px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.20) 0%, rgba(236, 253, 245, 0) 70%);
-  bottom: -100px;
-  left: 30%;
-  animation-duration: 25s;
+/* ── Strict Authentication Gate ── */
+.auth-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-@keyframes floatOrb {
-  0% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(30px) scale(1.08); }
-  100% { transform: translateY(-20px) scale(0.96); }
+.auth-gate-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
+
+.auth-gate-card {
+  width: 100%;
+  max-width: 460px;
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  box-shadow: 0 24px 60px -12px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(99, 102, 241, 0.1);
+  position: relative;
+  animation: authCardIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes authCardIn {
+  from { transform: translateY(16px) scale(0.97); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.auth-gate-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-gate-brand-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eef2ff, #f8fafc);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.25);
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+
+.auth-gate-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.auth-gate-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.auth-gate-btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.auth-gate-footer-note {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-subtle);
+  line-height: 1.4;
+}
+
+.auth-gate-footer-note code {
+  background: var(--bg-subtle);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--glow-indigo);
+  font-family: var(--font-mono);
+}
+
 
 /* ── Header ── */
 .header {

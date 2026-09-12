@@ -9,17 +9,57 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
-  <!-- Firebase SDKs (Compat version for zero-build static browser execution) -->
+  <!-- Firebase Web SDK Compat (zero build step) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <!-- ── Ambient Glowing Aurora Background ── -->
+  <!-- ── Ambient Glowing Aurora Lighting ── -->
   <div class="aurora-canvas">
     <div class="glow-orb orb-1"></div>
     <div class="glow-orb orb-2"></div>
     <div class="glow-orb orb-3"></div>
+  </div>
+
+  <!-- ── STRICT AUTHENTICATION GATE (Visible until user signs in) ── -->
+  <div class="auth-gate-overlay" id="authGateOverlay">
+    <div class="auth-gate-card">
+      <div class="auth-gate-header">
+        <div class="auth-gate-brand-icon">🧭</div>
+        <h2 class="auth-gate-title">Welcome to DailyPilot</h2>
+        <p class="auth-gate-subtitle">
+          Sign in to access your personal AI agent workspace.<br/>
+          Your real tasks, bills, and briefings are stored securely in your private <strong>Cloud Firestore</strong> database.
+        </p>
+      </div>
+
+      <div class="auth-card-body">
+        <div class="form-row">
+          <label>Email Address</label>
+          <input type="email" class="form-input" id="gateEmail" placeholder="you@example.com" />
+        </div>
+        <div class="form-row">
+          <label>Password</label>
+          <input type="password" class="form-input" id="gatePassword" placeholder="••••••••" />
+        </div>
+
+        <div class="auth-gate-btn-row">
+          <button class="btn btn-primary-glow" style="flex: 1;" onclick="gateEmailSignIn()">Sign In</button>
+          <button class="btn btn-outline" style="flex: 1;" onclick="gateEmailSignUp()">Create Account</button>
+        </div>
+
+        <div class="auth-divider"><span>OR ONE-CLICK GUEST ACCESS</span></div>
+
+        <button class="btn btn-glowing-mint" style="width: 100%;" onclick="gateAnonymousSignIn()">
+          ⚡ Instant Access as Guest
+        </button>
+
+        <div class="auth-gate-footer-note">
+          🔒 Powered by Firebase Authentication & Google Cloud Firestore (<code>ats-showcase-2026</code>)
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Top Navigation Bar ── -->
@@ -31,24 +71,29 @@
         </div>
         <div>
           <div class="brand-title">DailyPilot<span class="glow-dot"></span></div>
-          <div class="brand-subtitle">Autonomous Everyday AI Agent · Pure White</div>
+          <div class="brand-subtitle">Autonomous Everyday AI Agent · Cloud Firestore</div>
         </div>
       </div>
 
-      <!-- Center Status / Agent Heartbeat -->
+      <!-- Center Agent Heartbeat -->
       <div class="agent-heartbeat-badge" id="agentBadge">
         <span class="pulse-ring" id="agentPulse"></span>
         <span class="heartbeat-text" id="agentStatusText">Agent Idle · Ready</span>
       </div>
 
-      <!-- Right Action Hub: Firebase Auth & Trigger -->
+      <!-- Right Action Hub: User Profile, Scheduler, Trigger -->
       <div class="header-actions">
         <!-- Firebase User Pill -->
-        <div class="firebase-user-pill" id="firebaseUserPill" onclick="openAuthModal()">
+        <div class="firebase-user-pill" id="firebaseUserPill">
           <span class="firebase-icon">🔥</span>
-          <span class="user-display-name" id="userDisplayName">Sign in / Firebase</span>
+          <span class="user-display-name" id="userDisplayName">Signed In</span>
           <span class="cloud-sync-status" id="cloudSyncDot" title="Firestore Connected"></span>
         </div>
+
+        <!-- Sign Out Button -->
+        <button class="btn btn-xs btn-outline" onclick="handleSignOut()" title="Sign Out">
+          Sign Out
+        </button>
 
         <!-- Schedule Settings Button -->
         <button class="btn btn-outline" onclick="openScheduleModal()" title="Autonomous Scheduler Settings">
@@ -65,13 +110,13 @@
   </header>
 
   <!-- ── Main Workspace ── -->
-  <main class="main-wrapper">
+  <main class="main-wrapper" id="mainWorkspace">
 
     <!-- Active Running Banner -->
     <div class="active-run-banner" id="activeRunBanner" style="display: none;">
       <div class="runner-spinner"></div>
       <div class="banner-content">
-        <strong>DailyPilot is performing autonomous sweep:</strong> scanning tasks, comparing bill thresholds, dispatching routine reminders, and evaluating decision escalations...
+        <strong>DailyPilot is analyzing your items:</strong> scanning tasks, evaluating bill thresholds against expected category baselines, and preparing your daily briefing...
       </div>
     </div>
 
@@ -79,20 +124,20 @@
     <section class="kpi-grid">
       <div class="kpi-card card-glow-indigo">
         <div class="kpi-header">
-          <span class="kpi-title">Pending Tasks</span>
+          <span class="kpi-title">Your Active Tasks</span>
           <span class="kpi-icon">📋</span>
         </div>
-        <div class="kpi-value" id="kpiTasks">–</div>
-        <div class="kpi-footer" id="kpiTasksSub">Organized by urgency</div>
+        <div class="kpi-value" id="kpiTasks">0</div>
+        <div class="kpi-footer" id="kpiTasksSub">Saved in Firestore</div>
       </div>
 
       <div class="kpi-card card-glow-amber">
         <div class="kpi-header">
-          <span class="kpi-title">Upcoming Bills</span>
+          <span class="kpi-title">Your Active Bills</span>
           <span class="kpi-icon">💳</span>
         </div>
-        <div class="kpi-value" id="kpiBills">–</div>
-        <div class="kpi-footer" id="kpiBillsSub">Automated checks active</div>
+        <div class="kpi-value" id="kpiBills">0</div>
+        <div class="kpi-footer" id="kpiBillsSub">Monitored for anomalies</div>
       </div>
 
       <div class="kpi-card card-glow-rose">
@@ -100,7 +145,7 @@
           <span class="kpi-title">Human Decisions</span>
           <span class="kpi-icon">🚨</span>
         </div>
-        <div class="kpi-value text-rose" id="kpiAlerts">–</div>
+        <div class="kpi-value text-rose" id="kpiAlerts">0</div>
         <div class="kpi-footer">Escalated for your approval</div>
       </div>
 
@@ -109,8 +154,8 @@
           <span class="kpi-title">Total Obligation</span>
           <span class="kpi-icon">💰</span>
         </div>
-        <div class="kpi-value text-emerald" id="kpiTotal">–</div>
-        <div class="kpi-footer" id="kpiTotalSub">Audit in background</div>
+        <div class="kpi-value text-emerald" id="kpiTotal">$0.00</div>
+        <div class="kpi-footer" id="kpiTotalSub">Calculated from your bills</div>
       </div>
     </section>
 
@@ -147,17 +192,16 @@
               <span class="luminous-badge badge-indigo" id="tasksCountBadge">0</span>
             </div>
             <div class="card-actions-group">
-              <select class="clean-select" id="taskFilter" onchange="applyTaskFilter()">
+              <select class="clean-select" id="taskFilter" onchange="renderTasks()">
                 <option value="all">All Tasks</option>
                 <option value="pending" selected>Pending</option>
-                <option value="reminded">Reminded</option>
                 <option value="done">Completed</option>
               </select>
               <button class="btn btn-xs btn-primary-glow" onclick="openAddTaskModal()">+ Add Task</button>
             </div>
           </div>
           <div class="card-body scrollable-pane" id="tasksContainer">
-            <!-- Dynamic task items -->
+            <!-- Dynamic task items from Firestore -->
           </div>
         </section>
 
@@ -180,7 +224,7 @@
           <div class="card-body scrollable-pane briefing-render-box" id="briefingContent">
             <div class="empty-state">
               <div class="empty-icon">☕</div>
-              <p>No briefing generated yet.<br/><span class="text-dim">Click <strong>"Run Agent Now"</strong> to let DailyPilot compile your morning report.</span></p>
+              <p>Workspace is empty.<br/><span class="text-dim">Add your real tasks or bills and click <strong>"Run Agent Now"</strong> to generate your personal briefing.</span></p>
             </div>
           </div>
         </section>
@@ -193,7 +237,7 @@
               <span class="luminous-badge badge-amber" id="billsCountBadge">0</span>
             </div>
             <div class="card-actions-group">
-              <select class="clean-select" id="billFilter" onchange="applyBillFilter()">
+              <select class="clean-select" id="billFilter" onchange="renderBills()">
                 <option value="pending" selected>Pending</option>
                 <option value="all">All Bills</option>
                 <option value="paid">Paid</option>
@@ -202,19 +246,10 @@
             </div>
           </div>
           <div class="card-body scrollable-pane" id="billsContainer">
-            <!-- Dynamic bills items -->
+            <!-- Dynamic bills items from Firestore -->
           </div>
         </section>
 
-      </div>
-    </div>
-
-    <!-- ── Data Reset & Wipe Bar ── -->
-    <div class="quick-management-bar">
-      <span>⚙️ <strong>Workspace Controls:</strong> Want a fresh slate or to test sample records?</span>
-      <div class="quick-actions">
-        <button class="btn btn-xs btn-danger-outline" onclick="clearAllDataPrompt()">Clear All Data</button>
-        <button class="btn btn-xs btn-outline" onclick="resetSampleDataPrompt()">Reload Realistic Samples</button>
       </div>
     </div>
 
@@ -231,7 +266,7 @@
         <input type="hidden" id="taskFormId" value="" />
         <div class="form-row">
           <label>Task Description *</label>
-          <input type="text" class="form-input" id="taskFormTitle" placeholder="e.g. Pay gym membership or renew car registration" required />
+          <input type="text" class="form-input" id="taskFormTitle" placeholder="e.g. Schedule dentist appointment" required />
         </div>
         <div class="form-cols">
           <div class="form-row">
@@ -265,18 +300,17 @@
             <label>Status</label>
             <select class="form-input" id="taskFormStatus">
               <option value="pending">Pending</option>
-              <option value="reminded">Reminded</option>
               <option value="done">Done / Completed</option>
             </select>
           </div>
         </div>
         <div class="form-row">
-          <label>Notes / Context</label>
-          <input type="text" class="form-input" id="taskFormNotes" placeholder="Optional context or instructions for agent" />
+          <label>Notes / Details</label>
+          <input type="text" class="form-input" id="taskFormNotes" placeholder="Optional notes for this task" />
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline" onclick="closeModal('taskModal')">Cancel</button>
-          <button type="submit" class="btn btn-primary-glow" id="taskSubmitBtn">Save Task</button>
+          <button type="submit" class="btn btn-primary-glow" id="taskSubmitBtn">Save to Firestore</button>
         </div>
       </form>
     </div>
@@ -293,7 +327,7 @@
         <input type="hidden" id="billFormId" value="" />
         <div class="form-row">
           <label>Bill Name / Payee *</label>
-          <input type="text" class="form-input" id="billFormName" placeholder="e.g. Electric Utility, Netflix, Spectrum" required />
+          <input type="text" class="form-input" id="billFormName" placeholder="e.g. Electric Company, Rent, Internet" required />
         </div>
         <div class="form-cols">
           <div class="form-row">
@@ -328,16 +362,49 @@
         <div class="form-row">
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
             <input type="checkbox" id="billFormRecurring" checked />
-            <span>Recurring monthly bill</span>
+            <span>Recurring monthly expense</span>
           </label>
         </div>
         <div class="form-row">
-          <label>Notes / Billing Details</label>
-          <input type="text" class="form-input" id="billFormNotes" placeholder="Account #, auto-pay status, or history" />
+          <label>Notes / Account details</label>
+          <input type="text" class="form-input" id="billFormNotes" placeholder="Account # or notes" />
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline" onclick="closeModal('billModal')">Cancel</button>
-          <button type="submit" class="btn btn-primary-glow" id="billSubmitBtn">Save Bill</button>
+          <button type="submit" class="btn btn-primary-glow" id="billSubmitBtn">Save to Firestore</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL: Add Custom Decision / Alert ── -->
+  <div class="modal-backdrop" id="alertModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>🚨 Create Custom Human Decision / Alert</h3>
+        <button class="modal-close-btn" onclick="closeModal('alertModal')">✕</button>
+      </div>
+      <form id="alertForm" onsubmit="saveAlertSubmit(event)">
+        <div class="form-row">
+          <label>Alert Title *</label>
+          <input type="text" class="form-input" id="alertFormTitle" placeholder="e.g. Unusual service charge on account" required />
+        </div>
+        <div class="form-row">
+          <label>Severity</label>
+          <select class="form-input" id="alertFormSeverity">
+            <option value="low">Low (FYI)</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High (Action Needed)</option>
+            <option value="critical">Critical (Immediate Decision)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Explanation & Context *</label>
+          <textarea class="form-input" id="alertFormDesc" rows="3" placeholder="Explain why human attention is required" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal('alertModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary-glow">Save to Firestore</button>
         </div>
       </form>
     </div>
@@ -351,7 +418,7 @@
         <button class="modal-close-btn" onclick="closeModal('scheduleModal')">✕</button>
       </div>
       <div class="schedule-body">
-        <p class="text-dim mb-3">Configure how frequently the Strands Agent awakens in the background to scan tasks, detect bill anomalies, and issue reminders.</p>
+        <p class="text-dim mb-3">Configure how frequently the Strands Agent awakens in the background to scan your Firestore tasks, compare bill amounts, and compile briefings.</p>
         
         <div class="status-box">
           <div>
@@ -364,7 +431,7 @@
         <div class="form-row mt-3">
           <label>Run Interval Frequency</label>
           <select class="form-input" id="schedIntervalSelect" onchange="changeScheduleInterval(this.value)">
-            <option value="300">Every 5 Minutes (Demo Speed)</option>
+            <option value="300">Every 5 Minutes</option>
             <option value="900">Every 15 Minutes</option>
             <option value="1800">Every 30 Minutes</option>
             <option value="3600" selected>Every 1 Hour (Recommended)</option>
@@ -382,97 +449,6 @@
           </button>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- ── MODAL: Firebase Auth & Cloud Sync ── -->
-  <div class="modal-backdrop" id="authModal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:1.5rem">🔥</span>
-          <h3>Firebase Authentication & Firestore</h3>
-        </div>
-        <button class="modal-close-btn" onclick="closeModal('authModal')">✕</button>
-      </div>
-      <div class="auth-box-body">
-        <div id="authLoggedOutView">
-          <p class="text-dim mb-3">Sign in to sync your personal daily tasks and bills directly with <strong>Google Cloud Firestore</strong>.</p>
-          
-          <div class="form-row">
-            <label>Email Address</label>
-            <input type="email" class="form-input" id="authEmail" placeholder="your-email@domain.com" />
-          </div>
-          <div class="form-row">
-            <label>Password</label>
-            <input type="password" class="form-input" id="authPassword" placeholder="••••••••" />
-          </div>
-
-          <div style="display:flex; gap:10px; margin-top:14px;">
-            <button class="btn btn-primary-glow" style="flex:1" onclick="handleEmailSignIn()">Sign In</button>
-            <button class="btn btn-outline" style="flex:1" onclick="handleEmailSignUp()">Sign Up</button>
-          </div>
-
-          <div class="auth-divider"><span>OR QUICK GUEST LOGIN</span></div>
-
-          <button class="btn btn-glowing-mint" style="width:100%" onclick="handleAnonymousSignIn()">
-            ⚡ 1-Click Instant Guest Sign In
-          </button>
-        </div>
-
-        <div id="authLoggedInView" style="display:none;">
-          <div class="user-card-highlight">
-            <div class="avatar-circle" id="userAvatar">U</div>
-            <div>
-              <div class="user-card-name" id="userCardEmail">user@domain.com</div>
-              <div class="user-card-uid" id="userCardUid">UID: ...</div>
-            </div>
-          </div>
-          <div class="cloud-sync-info-box">
-            <span class="icon-sync">☁️</span>
-            <div>
-              <strong>Firestore Real-Time Database Active</strong>
-              <div class="text-xs text-dim">Changes persist to project <code>ats-showcase-2026</code>.</div>
-            </div>
-          </div>
-          <div class="modal-footer" style="margin-top:20px;">
-            <button class="btn btn-danger-outline" onclick="handleSignOut()">Sign Out</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── MODAL: Add Custom Decision / Alert ── -->
-  <div class="modal-backdrop" id="alertModal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3>🚨 Create Custom Human Decision / Alert</h3>
-        <button class="modal-close-btn" onclick="closeModal('alertModal')">✕</button>
-      </div>
-      <form id="alertForm" onsubmit="saveAlertSubmit(event)">
-        <div class="form-row">
-          <label>Alert Title *</label>
-          <input type="text" class="form-input" id="alertFormTitle" placeholder="e.g. Subscription Price Increased by $10" required />
-        </div>
-        <div class="form-row">
-          <label>Severity</label>
-          <select class="form-input" id="alertFormSeverity">
-            <option value="low">Low (FYI)</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High (Action Needed)</option>
-            <option value="critical">Critical (Immediate Decision)</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Explanation & Context *</label>
-          <textarea class="form-input" id="alertFormDesc" rows="3" placeholder="Explain why human attention is required" required></textarea>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="closeModal('alertModal')">Cancel</button>
-          <button type="submit" class="btn btn-primary-glow">Create Alert</button>
-        </div>
-      </form>
     </div>
   </div>
 
